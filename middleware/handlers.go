@@ -82,7 +82,6 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	var user models.User
 
 	err := json.NewDecoder(r.Body).Decode(&user)
-
 	if err != nil {
 		log.Fatalf("Unable to decode the request body.  %v", err)
 	}
@@ -99,24 +98,43 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
+// UpdateUser updates a user row in the db
+func UpdateUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Context-Type", "application/x-www-form-urlencoded")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "PATCH")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+	var user models.User
+
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		log.Fatalf("Unable to decode the request body.  %v", err)
+	}
+
+	updatedRowID, err := updateUser(user)
+
+	res := response{
+		ID:      updatedRowID,
+		Message: "User updated successfully",
+	}
+
+	// send the response
+	json.NewEncoder(w).Encode(res)
+}
+
 // --------------------------- Handler functions -------------------------
 
 func getUser(id int) (models.User, error) {
 	db := createConnection()
-
-	// close the db connection
 	defer db.Close()
 
-	// create a user of models.User type
 	var user models.User
 
-	// create the select sql query
 	sqlStatement := `SELECT * FROM users WHERE userid=$1`
 
-	// execute the sql statement
 	row := db.QueryRow(sqlStatement, id)
 
-	// unmarshal the row object to user
 	err := row.Scan(&user.ID, &user.Name, &user.Age, &user.Location)
 
 	switch err {
@@ -129,20 +147,28 @@ func getUser(id int) (models.User, error) {
 		log.Fatalf("Unable to scan the row. %v", err)
 	}
 
-	// return empty user on error
 	return user, err
 }
 
 func insertUser(user models.User) (int64, error) {
 	db := createConnection()
-
-	// close the db connection
 	defer db.Close()
+
 	sqlStatement := `INSERT INTO users (name, location, age) VALUES ($1, $2, $3)`
 
 	var id int64
 	err := db.QueryRow(sqlStatement, user.Name, user.Location, user.Age).Scan(&id)
 
-	fmt.Printf("Inserted a single record %v", id)
 	return id, err
+}
+
+func updateUser(user models.User) (int64, error) {
+	db := createConnection()
+	defer db.Close()
+
+	sqlStatement := `UPDATE users SET name=$1, location=$2, age=$3 WHERE userid = $4`
+
+	res, err := db.Exec(sqlStatement, user.Name, user.Location, user.Age, user.ID)
+	rowsAffected, err := res.RowsAffected()
+	return rowsAffected, err
 }
